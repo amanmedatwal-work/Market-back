@@ -142,9 +142,18 @@ app.use('/runtime-proxy/:projectId', (req, res, next) => {
 });
 
 // Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/projects', require('./routes/projectRoutes'));
-app.use('/api/orders', require('./routes/orderRoutes'));
+const authRoutes = require('./routes/authRoutes');
+const projectRoutes = require('./routes/projectRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/orders', orderRoutes);
+
+// Vercel catch-all functions can pass /api/auth/google as /auth/google.
+app.use('/auth', authRoutes);
+app.use('/projects', projectRoutes);
+app.use('/orders', orderRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -152,6 +161,10 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
+  res.json({ ok: true, service: 'Marketplace API' });
+});
+
+app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'Marketplace API' });
 });
 
