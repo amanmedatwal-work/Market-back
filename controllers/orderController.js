@@ -4,10 +4,16 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { getConnectionStatus } = require('../config/db');
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+const getRazorpayClient = () => {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    return null;
+  }
+
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+};
 
 
 // @desc    Create new order and simulate payment
@@ -90,6 +96,11 @@ const getMyOrders = async (req, res) => {
 // @access  Private
 const createRazorpayOrder = async (req, res) => {
   try {
+    const razorpay = getRazorpayClient();
+    if (!razorpay) {
+      return res.status(503).json({ message: 'Razorpay is not configured.' });
+    }
+
     const { projectId } = req.body;
     const project = await Project.findById(projectId);
 
@@ -125,6 +136,10 @@ const createRazorpayOrder = async (req, res) => {
 // @access  Private
 const verifyRazorpayPayment = async (req, res) => {
   try {
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(503).json({ message: 'Razorpay is not configured.' });
+    }
+
     const {
       razorpay_order_id,
       razorpay_payment_id,
