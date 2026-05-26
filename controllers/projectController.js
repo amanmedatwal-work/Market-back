@@ -5,6 +5,8 @@ const { generateThumbnailDataUrl, generateGitHubThumbnailUrl } = require('../ser
 const path = require('path');
 const fs = require('fs');
 
+const getApiBaseUrl = () => (process.env.API_URL || 'http://localhost:5000').replace(/\/$/, '');
+
 // @desc    Fetch all approved projects
 // @route   GET /api/projects
 // @access  Public
@@ -430,7 +432,7 @@ const generateAiThumbnail = async (req, res) => {
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
     const { captureScreenshotBase64 } = require('../services/thumbnailService');
-    const previewUrl = `http://localhost:5000/api/projects/preview/${req.params.id}`;
+    const previewUrl = `${getApiBaseUrl()}/api/projects/preview/${req.params.id}`;
 
     const thumbnail = await captureScreenshotBase64(previewUrl);
     if (thumbnail) {
@@ -485,7 +487,7 @@ const generateTempPreviewLink = async (req, res) => {
         }
         if (result.status === 'static') {
           return res.json({
-            url: `http://localhost:5000/api/projects/preview/${req.params.id}`,
+            url: `${getApiBaseUrl()}/api/projects/preview/${req.params.id}`,
             type: 'static',
           });
         }

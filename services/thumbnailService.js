@@ -1,10 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 
-let puppeteer = null;
-try {
-  puppeteer = require('puppeteer');
-} catch (_) {}
+const getPuppeteer = () => {
+  if (process.env.VERCEL) return null;
+
+  try {
+    return require('puppeteer');
+  } catch (_) {
+    return null;
+  }
+};
 
 function detectHeroImage(projectDir) {
   const candidates = [];
@@ -116,6 +121,7 @@ function generateGitHubThumbnailUrl(owner, repo) {
 // ─── AI-powered screenshot via Puppeteer ─────────────────────────────────
 
 async function captureScreenshot(url, outputPath) {
+  const puppeteer = getPuppeteer();
   if (!puppeteer) {
     throw new Error('Puppeteer not available. Install it with: npm install puppeteer');
   }
@@ -189,6 +195,7 @@ async function captureScreenshot(url, outputPath) {
 }
 
 async function captureScreenshotBase64(url) {
+  const puppeteer = getPuppeteer();
   if (!puppeteer) return null;
 
   let browser;

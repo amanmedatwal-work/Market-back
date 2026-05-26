@@ -40,8 +40,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors({
   origin: function (origin, callback) {
-    const allowedOrigins = [process.env.CLIENT_URL || 'http://localhost:5173', 'http://127.0.0.1:5173'];
-    if (!origin || allowedOrigins.includes(origin)) {
+    const configuredOrigins = [
+      process.env.CLIENT_URL,
+      process.env.FRONTEND_URL,
+      ...(process.env.ALLOWED_ORIGINS || '').split(','),
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'https://marketplace-nine-blue.vercel.app',
+    ].filter(Boolean).map((url) => url.trim().replace(/\/$/, ''));
+    const normalizedOrigin = origin?.replace(/\/$/, '');
+    const isAllowedVercelOrigin = normalizedOrigin && /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin);
+
+    if (!origin || configuredOrigins.includes(normalizedOrigin) || isAllowedVercelOrigin) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -58,7 +68,7 @@ app.use(helmet({
       'frame-src': ['*'],
       'child-src': ['*'],
       'form-action': ['*'],
-      'frame-ancestors': ["'self'", 'http://localhost:5173', 'http://127.0.0.1:5173'],
+      'frame-ancestors': ["'self'", 'http://localhost:5173', 'http://127.0.0.1:5173', 'https://*.vercel.app'],
     },
   },
   crossOriginOpenerPolicy: { policy: 'unsafe-none' },
@@ -73,8 +83,12 @@ const fs = require('fs');
 const previewsDir = process.env.VERCEL
   ? path.join('/tmp', 'marketplace-previews')
   : path.join(__dirname, 'previews');
-if (!fs.existsSync(previewsDir)) {
-  fs.mkdirSync(previewsDir, { recursive: true });
+try {
+  if (!fs.existsSync(previewsDir)) {
+    fs.mkdirSync(previewsDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn(`Preview directory unavailable: ${err.message}`);
 }
 app.use('/previews', express.static(previewsDir, {
   setHeaders: (res) => {
@@ -137,6 +151,10 @@ app.use('/api/orders', require('./routes/orderRoutes'));
 // Basic route
 app.get('/', (req, res) => {
   res.send('Marketplace API is running...');
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, service: 'Marketplace API' });
 });
 
 // Global error handler
