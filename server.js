@@ -116,11 +116,9 @@ app.get('/api/thumbnail-proxy', async (req, res) => {
 
 app.use(morgan('dev'));
 
-// Runtime preview proxy middleware
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const { getSandbox } = require('./services/sandboxService');
-
 app.use('/runtime-proxy/:projectId', (req, res, next) => {
+  const { createProxyMiddleware } = require('http-proxy-middleware');
+  const { getSandbox } = require('./services/sandboxService');
   const sandbox = getSandbox(req.params.projectId);
   if (!sandbox || sandbox.status !== 'running' || !sandbox.port) {
     return res.status(404).json({ message: 'Runtime sandbox not running' });
