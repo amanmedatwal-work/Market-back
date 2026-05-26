@@ -14,8 +14,7 @@ const requiredEnvVars = ['JWT_SECRET', 'MONGO_URI'];
 const missing = requiredEnvVars.filter(v => !process.env[v]);
 if (missing.length > 0) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);
-  console.error('Please set them in server/.env file.');
-  process.exit(1);
+  console.error('Please set them in server/.env locally or in your deployment environment variables.');
 }
 
 // Warn about placeholder OAuth secrets
@@ -71,7 +70,9 @@ app.use(helmet({
 // Serve extracted project previews as static files
 const path = require('path');
 const fs = require('fs');
-const previewsDir = path.join(__dirname, 'previews');
+const previewsDir = process.env.VERCEL
+  ? path.join('/tmp', 'marketplace-previews')
+  : path.join(__dirname, 'previews');
 if (!fs.existsSync(previewsDir)) {
   fs.mkdirSync(previewsDir, { recursive: true });
 }
@@ -153,6 +154,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  });
+}
+
+module.exports = app;
