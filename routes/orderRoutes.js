@@ -6,6 +6,7 @@ const {
   getMyOrders,
   createRazorpayOrder,
   verifyRazorpayPayment,
+  getSellerSales,
 } = require('../controllers/orderController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -15,6 +16,7 @@ router.post('/', protect, createOrder);
 router.post('/razorpay', protect, createRazorpayOrder);
 router.post('/verify', protect, verifyRazorpayPayment);
 router.get('/myorders', protect, getMyOrders);
+router.get('/seller/sales', protect, getSellerSales);
 router.get('/:id', protect, getOrderById);
 
 module.exports = router;

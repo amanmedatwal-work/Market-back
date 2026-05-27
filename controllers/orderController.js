@@ -184,10 +184,42 @@ const verifyRazorpayPayment = async (req, res) => {
   }
 };
 
+// @desc    Get seller sales stats (total earnings & count)
+// @route   GET /api/orders/seller/sales
+// @access  Private
+const getSellerSales = async (req, res) => {
+  try {
+    // 1. Find all projects belonging to the seller
+    const projects = await Project.find({ seller: req.user._id });
+    const projectIds = projects.map(p => p._id);
+
+    // 2. Find all paid orders for these projects
+    const orders = await Order.find({
+      project: { $in: projectIds },
+      isPaid: true
+    }).populate('project', 'title price');
+
+    // 3. Calculate total earnings
+    const totalEarnings = orders.reduce((sum, order) => sum + order.totalPrice, 0);
+
+    res.json({
+      totalEarnings,
+      salesCount: orders.length,
+      orders
+    });
+  } catch (error) {
+    if (!getConnectionStatus()) {
+      return res.status(500).json({ message: 'Server error! Make sure MongoDB is running.' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrderById,
   getMyOrders,
   createRazorpayOrder,
-  verifyRazorpayPayment
+  verifyRazorpayPayment,
+  getSellerSales
 };
