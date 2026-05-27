@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { getConnectionStatus } = require('../config/db');
 
+const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
@@ -131,7 +133,7 @@ const googleOAuthCallback = (req, res) => {
   const user = req.user;
   if (!user) {
     console.error('[Google OAuth] Callback reached without user. Authentication failed.');
-    return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
+    return res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
   }
   console.log(`[Google OAuth] Successful login for: ${user.email}`);
   const intendedRole = req.cookies?.oauth_role || user.role;
@@ -147,7 +149,7 @@ const googleOAuthCallback = (req, res) => {
     token,
   });
   res.redirect(
-    `${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?data=${encodeURIComponent(userData)}`
+    `${CLIENT_URL}/auth/callback?data=${encodeURIComponent(userData)}`
   );
 };
 
@@ -158,7 +160,7 @@ const githubOAuthCallback = (req, res) => {
   const user = req.user;
   if (!user) {
     console.error('[GitHub OAuth] Callback reached without user. Authentication failed.');
-    return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
+    return res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
   }
   console.log(`[GitHub OAuth] Successful login for: ${user.email}`);
   const intendedRole = req.cookies?.oauth_role || user.role;
@@ -174,7 +176,7 @@ const githubOAuthCallback = (req, res) => {
     token,
   });
   res.redirect(
-    `${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?data=${encodeURIComponent(userData)}`
+    `${CLIENT_URL}/auth/callback?data=${encodeURIComponent(userData)}`
   );
 };
 

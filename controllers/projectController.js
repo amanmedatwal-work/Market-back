@@ -5,6 +5,24 @@ const { generateThumbnailDataUrl, generateGitHubThumbnailUrl } = require('../ser
 const path = require('path');
 const fs = require('fs');
 
+const PREVIEWS_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'marketplace-previews')
+  : path.join(__dirname, '..', 'previews');
+
+const UPLOADS_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'marketplace-uploads')
+  : path.join(__dirname, '..', 'uploads');
+
+const getProjectFileData = (projectId, fileData) => {
+  if (fileData === 'file_stored_on_disk') {
+    const filePath = path.join(UPLOADS_DIR, `${projectId.toString()}.txt`);
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf-8');
+    }
+  }
+  return fileData;
+};
+
 const getApiBaseUrl = () => (process.env.API_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 // @desc    Fetch all approved projects
@@ -79,7 +97,7 @@ const createProject = async (req, res) => {
       uploadMethod,
       githubRepoUrl,
       fileUrl,
-      fileData,
+      fileData: fileData ? 'file_stored_on_disk' : '',
       fileOriginalName,
       thumbnail,
       seller: req.user._id,
@@ -89,8 +107,15 @@ const createProject = async (req, res) => {
 
     const createdProject = await project.save();
 
-    // Auto-analyze if file was uploaded
+    // Store fileData to disk if present
     if (fileData) {
+      if (!fs.existsSync(UPLOADS_DIR)) {
+        fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      }
+      const filePath = path.join(UPLOADS_DIR, `${createdProject._id}.txt`);
+      fs.writeFileSync(filePath, fileData, 'utf-8');
+
+      // Auto-analyze
       analyzeAndUpdateProject(createdProject._id, fileData).catch((err) => {
         console.error('Auto-analysis failed:', err.message);
       });
@@ -118,10 +143,10 @@ const analyzeProjectFiles = async (req, res) => {
       return res.status(400).json({ message: 'No uploaded file data to analyze' });
     }
 
-    const analysis = analyzeProject(req.params.id, project.fileData);
+    const analysis = analyzeProject(req.params.id, getProjectFileData(project._id, project.fileData));
 
     // Auto-generate thumbnail from project files
-    const previewDir = path.join(__dirname, '..', 'previews', req.params.id);
+    const previewDir = path.join(PREVIEWS_DIR, req.params.id);
     const entryPath = analysis.entryPoint.replace(/^\//, '');
     let entryContent = null;
     const fullEntryPath = path.join(previewDir, entryPath);
@@ -216,7 +241,7 @@ const regenerateThumbnail = async (req, res) => {
     let thumbnail = null;
 
     if (project.fileData) {
-      const previewDir = path.join(__dirname, '..', 'previews', req.params.id);
+      const previewDir = path.join(PREVIEWS_DIR, req.params.id);
       const entryPath = project.analysis?.entryPoint?.replace(/^\//, '') || 'index.html';
       let entryContent = null;
       const fullEntryPath = path.join(previewDir, entryPath);
@@ -285,7 +310,7 @@ const getProjectPreview = async (req, res) => {
     if (!status.extracted) {
       try {
         const { extractProject, findEntryPoint } = require('../services/previewService');
-        extractProject(req.params.id, project.fileData);
+        extractProject(req.params.id, getProjectFileData(project._id, project.fileData));
         const entry = findEntryPoint(req.params.id);
         if (entry) {
           project.previewStatus = 'ready';
@@ -301,7 +326,7 @@ const getProjectPreview = async (req, res) => {
     }
 
     const AdmZip = require('adm-zip');
-    const previewDir = path.join(__dirname, '..', 'previews', req.params.id);
+    const previewDir = path.join(PREVIEWS_DIR, req.params.id);
 
     // Detect entry point
     const entryCandidates = [
@@ -334,8 +359,9 @@ const getProjectPreview = async (req, res) => {
 // Internal helper
 async function analyzeAndUpdateProject(projectId, fileData) {
   try {
-    const analysis = analyzeProject(projectId, fileData);
-    const previewDir = path.join(__dirname, '..', 'previews', projectId);
+    const projIdStr = projectId.toString();
+    const analysis = analyzeProject(projIdStr, fileData);
+    const previewDir = path.join(PREVIEWS_DIR, projIdStr);
     const entryPath = analysis.entryPoint.replace(/^\//, '');
     let entryContent = null;
     const fullEntryPath = path.join(previewDir, entryPath);
@@ -387,7 +413,7 @@ const startRuntimePreview = async (req, res) => {
     if (!project.fileData) return res.status(400).json({ message: 'No file data to run' });
 
     const { startSandbox } = require('../services/sandboxService');
-    const result = await startSandbox(req.params.id, project.fileData);
+    const result = await startSandbox(req.params.id, getProjectFileData(project._id, project.fileData));
     res.json(result);
   } catch (error) {
     if (error.message.includes('Maximum')) {
@@ -442,7 +468,7 @@ const generateAiThumbnail = async (req, res) => {
     }
 
     // Fallback to hero image detection
-    const previewDir = path.join(__dirname, '..', 'previews', req.params.id);
+    const previewDir = path.join(PREVIEWS_DIR, req.params.id);
     const entryPath = project.analysis?.entryPoint?.replace(/^\//, '') || 'index.html';
     let entryContent = null;
     if (fs.existsSync(path.join(previewDir, entryPath))) {
@@ -481,7 +507,7 @@ const generateTempPreviewLink = async (req, res) => {
         return res.json({ url: status.previewUrl, type: 'runtime' });
       }
       try {
-        const result = await startSandbox(req.params.id, project.fileData);
+        const result = await startSandbox(req.params.id, getProjectFileData(project._id, project.fileData));
         if (result.status === 'running' && result.previewUrl) {
           return res.json({ url: result.previewUrl, type: 'runtime' });
         }
@@ -545,8 +571,9 @@ const downloadProjectFile = async (req, res) => {
       return res.status(400).json({ message: 'No file data available for this project' });
     }
 
+    const fileData = getProjectFileData(project._id, project.fileData);
     // Parse base64
-    const matches = project.fileData.match(/^data:(.+);base64,(.+)$/);
+    const matches = fileData.match(/^data:(.+);base64,(.+)$/);
     let buffer;
     let contentType = 'application/octet-stream';
 
@@ -554,7 +581,7 @@ const downloadProjectFile = async (req, res) => {
       contentType = matches[1];
       buffer = Buffer.from(matches[2], 'base64');
     } else {
-      buffer = Buffer.from(project.fileData, 'base64');
+      buffer = Buffer.from(fileData, 'base64');
     }
 
     const fileName = project.fileOriginalName || `${project.title.toLowerCase().replace(/\s+/g, '_')}_project.zip`;

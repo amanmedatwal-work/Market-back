@@ -7,7 +7,8 @@ const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
 
 // Load environment variables
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'MONGO_URI'];
@@ -35,9 +36,6 @@ const passport = require('./config/passport');
 
 const app = express();
 
-// Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors({
   origin: function (origin, callback) {
     const configuredOrigins = [
@@ -59,6 +57,10 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// Body parsers
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cookieParser());
 app.use(passport.initialize());
 app.use(helmet({
@@ -78,7 +80,6 @@ app.use(helmet({
 }));
 
 // Serve extracted project previews as static files
-const path = require('path');
 const fs = require('fs');
 const previewsDir = process.env.VERCEL
   ? path.join('/tmp', 'marketplace-previews')
@@ -170,12 +171,18 @@ app.get('/health', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
   const message = err.message || 'Server error';
   if (err.name === 'MongooseError' || err.name === 'MongooseServerSelectionError') {
     return res.status(500).json({ message: 'Server error! Make sure MongoDB is running.' });
   }
   if (err.type === 'entity.too.large') {
-    return res.status(413).json({ message: 'File too large. Maximum upload size is 50MB.' });
+    return res.status(413).json({ message: 'File too large. Maximum upload size is 100MB.' });
   }
   console.error(err.stack);
   res.status(err.statusCode || 500).json({ message });
@@ -190,3 +197,6 @@ if (require.main === module) {
 }
 
 module.exports = app;
+
+// Trigger nodemon reload to load the latest environment variables
+

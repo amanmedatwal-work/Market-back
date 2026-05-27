@@ -3,8 +3,8 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const GitHubStrategy = require('passport-github2').Strategy;
 const User = require('../models/User');
 
-const CLIENT_BASE_URL = process.env.CLIENT_URL || 'http://localhost:5173';
-const API_BASE_URL = process.env.API_URL || 'http://localhost:5000';
+const CLIENT_BASE_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+const API_BASE_URL = (process.env.API_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 // Serialize user ID into session
 passport.serializeUser((user, done) => {

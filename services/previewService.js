@@ -3,10 +3,12 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const { detectFramework, getPackageManager, extractEntryContent } = require('./frameworkDetector');
 
-const PREVIEWS_DIR = path.join(__dirname, '..', 'previews');
+const PREVIEWS_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'marketplace-previews')
+  : path.join(__dirname, '..', 'previews');
 
 function getPreviewDir(projectId) {
-  return path.join(PREVIEWS_DIR, projectId);
+  return path.join(PREVIEWS_DIR, projectId.toString());
 }
 
 function extractProject(projectId, fileData) {
@@ -22,7 +24,10 @@ function extractProject(projectId, fileData) {
   }
   fs.mkdirSync(previewDir, { recursive: true });
 
-  const zipBuffer = Buffer.from(fileData, 'base64');
+  const base64Data = fileData.includes(';base64,')
+    ? fileData.split(';base64,').pop()
+    : fileData;
+  const zipBuffer = Buffer.from(base64Data, 'base64');
   const zip = new AdmZip(zipBuffer);
   zip.extractAllTo(previewDir, true);
 

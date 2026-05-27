@@ -5,7 +5,9 @@ const net = require('net');
 
 const { detectFramework, getPackageManager, getStartCommand } = require('./frameworkDetector');
 
-const PREVIEWS_DIR = path.join(__dirname, '..', 'previews');
+const PREVIEWS_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'marketplace-previews')
+  : path.join(__dirname, '..', 'previews');
 const MAX_SANDBOXES = 3;
 const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 min
 const INSTALL_TIMEOUT_MS = 120 * 1000; // 2 min
