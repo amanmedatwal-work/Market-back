@@ -38,6 +38,7 @@ const app = express();
 
 app.use(cors({
   origin: function (origin, callback) {
+    console.log('CORS Request Origin:', origin);
     const configuredOrigins = [
       process.env.CLIENT_URL,
       process.env.FRONTEND_URL,
@@ -48,8 +49,13 @@ app.use(cors({
     ].filter(Boolean).map((url) => url.trim().replace(/\/$/, ''));
     const normalizedOrigin = origin?.replace(/\/$/, '');
     const isAllowedVercelOrigin = normalizedOrigin && /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin);
+    const isLocalhost = normalizedOrigin && (
+      normalizedOrigin.startsWith('http://localhost') ||
+      normalizedOrigin.startsWith('http://127.0.0.1') ||
+      normalizedOrigin === 'null'
+    );
 
-    if (!origin || configuredOrigins.includes(normalizedOrigin) || isAllowedVercelOrigin) {
+    if (!origin || configuredOrigins.includes(normalizedOrigin) || isAllowedVercelOrigin || isLocalhost) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
