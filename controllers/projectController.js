@@ -534,6 +534,35 @@ const generateTempPreviewLink = async (req, res) => {
   }
 };
 
+// Helper to fetch URL following redirects (useful for GitHub repository downloads)
+const fetchUrlWithRedirects = (url, callback, redirectCount = 0) => {
+  const https = require('https');
+  if (redirectCount > 5) {
+    return callback(new Error('Too many redirects'));
+  }
+  https.get(url, { headers: { 'User-Agent': 'Node.js' } }, (res) => {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      fetchUrlWithRedirects(res.headers.location, callback, redirectCount + 1);
+    } else if (res.statusCode === 200) {
+      callback(null, res);
+    } else {
+      callback(new Error(`Failed to fetch: ${res.statusCode}`));
+    }
+  }).on('error', (err) => {
+    callback(err);
+  });
+};
+
+const getExtensionFromMime = (mime) => {
+  if (!mime) return '.zip';
+  if (mime.includes('pdf')) return '.pdf';
+  if (mime.includes('png')) return '.png';
+  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';
+  if (mime.includes('text/plain')) return '.txt';
+  if (mime.includes('text/html')) return '.html';
+  return '.zip';
+};
+
 // @desc    Download purchased project file
 // @route   GET /api/projects/:id/download
 // @access  Private
@@ -568,6 +597,38 @@ const downloadProjectFile = async (req, res) => {
     }
 
     if (!project.fileData) {
+      // If it is a GitHub repository project, stream the zip from GitHub
+      if (project.githubRepoUrl) {
+        const cleanUrl = project.githubRepoUrl.replace(/\.git$/, '');
+        const match = cleanUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+        if (match) {
+          const owner = match[1];
+          const repo = match[2];
+          const fileName = project.fileOriginalName || `${repo.toLowerCase()}_project.zip`;
+          
+          const mainZipUrl = `https://github.com/${owner}/${repo}/archive/refs/heads/main.zip`;
+          const masterZipUrl = `https://github.com/${owner}/${repo}/archive/refs/heads/master.zip`;
+          
+          const streamZip = (url, fallbackUrl) => {
+            fetchUrlWithRedirects(url, (err, fetchRes) => {
+              if (err) {
+                if (fallbackUrl) {
+                  // Fallback to master branch zip
+                  return streamZip(fallbackUrl, null);
+                }
+                return res.status(500).json({ message: `Failed to download from GitHub: ${err.message}` });
+              }
+              res.set({
+                'Content-Type': fetchRes.headers['content-type'] || 'application/zip',
+                'Content-Disposition': `attachment; filename="${fileName}"`
+              });
+              fetchRes.pipe(res);
+            });
+          };
+          
+          return streamZip(mainZipUrl, masterZipUrl);
+        }
+      }
       return res.status(400).json({ message: 'No file data available for this project' });
     }
 
@@ -576,15 +637,17 @@ const downloadProjectFile = async (req, res) => {
     const matches = fileData.match(/^data:(.+);base64,(.+)$/);
     let buffer;
     let contentType = 'application/octet-stream';
+    let extension = '.zip';
 
     if (matches && matches.length === 3) {
       contentType = matches[1];
       buffer = Buffer.from(matches[2], 'base64');
+      extension = getExtensionFromMime(contentType);
     } else {
       buffer = Buffer.from(fileData, 'base64');
     }
 
-    const fileName = project.fileOriginalName || `${project.title.toLowerCase().replace(/\s+/g, '_')}_project.zip`;
+    const fileName = project.fileOriginalName || `${project.title.toLowerCase().replace(/\s+/g, '_')}_project${extension}`;
 
     res.set({
       'Content-Type': contentType,
@@ -595,6 +658,43 @@ const downloadProjectFile = async (req, res) => {
     res.send(buffer);
   } catch (error) {
     const { getConnectionStatus } = require('../config/db');
+    if (!getConnectionStatus()) {
+      return res.status(500).json({ message: 'Server error! Make sure MongoDB is running.' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Rate a project
+// @route   POST /api/projects/:id/rate
+// @access  Private
+const rateProject = async (req, res) => {
+  try {
+    const { rating } = req.body;
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'Please provide a rating between 1 and 5' });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const currentTotalRating = project.ratings * project.numReviews;
+    const newNumReviews = project.numReviews + 1;
+    const newAverageRating = (currentTotalRating + Number(rating)) / newNumReviews;
+
+    project.ratings = Math.round(newAverageRating * 10) / 10;
+    project.numReviews = newNumReviews;
+
+    await project.save();
+
+    res.json({
+      message: 'Rating submitted successfully',
+      ratings: project.ratings,
+      numReviews: project.numReviews
+    });
+  } catch (error) {
     if (!getConnectionStatus()) {
       return res.status(500).json({ message: 'Server error! Make sure MongoDB is running.' });
     }
@@ -617,4 +717,5 @@ module.exports = {
   generateAiThumbnail,
   generateTempPreviewLink,
   downloadProjectFile,
+  rateProject,
 };

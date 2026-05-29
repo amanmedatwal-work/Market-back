@@ -15,6 +15,7 @@ const {
   generateAiThumbnail,
   generateTempPreviewLink,
   downloadProjectFile,
+  rateProject,
 } = require('../controllers/projectController');
 const { protect, seller } = require('../middleware/authMiddleware');
 
@@ -41,6 +42,9 @@ router.post('/temp-preview-link/:id', generateTempPreviewLink);
 
 // Download purchased project
 router.get('/:id/download', protect, downloadProjectFile);
+
+// Submit rating
+router.post('/:id/rate', protect, rateProject);
 
 router.get('/:id', getProjectById);
 
